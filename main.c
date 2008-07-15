@@ -264,7 +264,7 @@ int main (int argc, char **argv) { /* {{{ */
         }
     }
    
-    while ((opt = getopt(argc, argv, "FGVvhlupidmxa:r:s:c:t:w:k:o:n:g:e:b:N:I:T:R:")) != -1) {
+    while ((opt = getopt(argc, argv, "FGVvhlupidmxa:r:s:c:t:w:k:o:n:g:e:b:z:N:I:T:R:")) != -1) {
         missing_option = 0;
         switch (opt) {
             case 'F':
@@ -289,7 +289,7 @@ int main (int argc, char **argv) { /* {{{ */
             case 'p':
                 options.show_pid = 1;
                 break;
-            case 'a': case 'c': case 'R':
+            case 'a': case 'c': case 'R': case 'z':
                 options.param_window = optarg;
                 action = opt;
                 break;
@@ -355,7 +355,7 @@ int main (int argc, char **argv) { /* {{{ */
         case 'm':
             ret = wm_info(disp);
             break;
-        case 'a': case 'c': case 'R': 
+        case 'a': case 'c': case 'R': case 'z':
         case 't': case 'e': case 'b': case 'N': case 'I': case 'T':
             if (! options.param_window) {
                 fputs("No window was specified.\n", stderr);
@@ -381,323 +381,323 @@ int main (int argc, char **argv) { /* {{{ */
             ret = change_geometry(disp);
             break;
     }
-    
+
     XCloseDisplay(disp);
     return ret;
 }
 /* }}} */
 
 static void init_charset (void) {/*{{{*/
-    const gchar *charset; /* unused */
-    gchar *lang = getenv("LANG") ? g_ascii_strup(getenv("LANG"), -1) : NULL; 
-    gchar *lc_ctype = getenv("LC_CTYPE") ? g_ascii_strup(getenv("LC_CTYPE"), -1) : NULL;
-    
-    /* this glib function doesn't work on my system ... */
-    envir_utf8 = g_get_charset(&charset);
+  const gchar *charset; /* unused */
+  gchar *lang = getenv("LANG") ? g_ascii_strup(getenv("LANG"), -1) : NULL; 
+  gchar *lc_ctype = getenv("LC_CTYPE") ? g_ascii_strup(getenv("LC_CTYPE"), -1) : NULL;
 
-    /* ... therefore we will examine the environment variables */
-    if (lc_ctype && (strstr(lc_ctype, "UTF8") || strstr(lc_ctype, "UTF-8"))) {
-        envir_utf8 = TRUE;
-    }
-    else if (lang && (strstr(lang, "UTF8") || strstr(lang, "UTF-8"))) {
-        envir_utf8 = TRUE;
-    }
+  /* this glib function doesn't work on my system ... */
+  envir_utf8 = g_get_charset(&charset);
 
-    g_free(lang);
-    g_free(lc_ctype);
-    
-    if (options.force_utf8) {
-        envir_utf8 = TRUE;
-    }
-    p_verbose("envir_utf8: %d\n", envir_utf8);
+  /* ... therefore we will examine the environment variables */
+  if (lc_ctype && (strstr(lc_ctype, "UTF8") || strstr(lc_ctype, "UTF-8"))) {
+    envir_utf8 = TRUE;
+  }
+  else if (lang && (strstr(lang, "UTF8") || strstr(lang, "UTF-8"))) {
+    envir_utf8 = TRUE;
+  }
+
+  g_free(lang);
+  g_free(lc_ctype);
+
+  if (options.force_utf8) {
+    envir_utf8 = TRUE;
+  }
+  p_verbose("envir_utf8: %d\n", envir_utf8);
 }/*}}}*/
 
 static int client_msg(Display *disp, Window win, char *msg, /* {{{ */
-        unsigned long data0, unsigned long data1, 
-        unsigned long data2, unsigned long data3,
-        unsigned long data4) {
-    XEvent event;
-    long mask = SubstructureRedirectMask | SubstructureNotifyMask;
+    unsigned long data0, unsigned long data1, 
+    unsigned long data2, unsigned long data3,
+    unsigned long data4) {
+  XEvent event;
+  long mask = SubstructureRedirectMask | SubstructureNotifyMask;
 
-    event.xclient.type = ClientMessage;
-    event.xclient.serial = 0;
-    event.xclient.send_event = True;
-    event.xclient.message_type = XInternAtom(disp, msg, False);
-    event.xclient.window = win;
-    event.xclient.format = 32;
-    event.xclient.data.l[0] = data0;
-    event.xclient.data.l[1] = data1;
-    event.xclient.data.l[2] = data2;
-    event.xclient.data.l[3] = data3;
-    event.xclient.data.l[4] = data4;
-    
-    if (XSendEvent(disp, DefaultRootWindow(disp), False, mask, &event)) {
-        return EXIT_SUCCESS;
-    }
-    else {
-        fprintf(stderr, "Cannot send %s event.\n", msg);
-        return EXIT_FAILURE;
-    }
+  event.xclient.type = ClientMessage;
+  event.xclient.serial = 0;
+  event.xclient.send_event = True;
+  event.xclient.message_type = XInternAtom(disp, msg, False);
+  event.xclient.window = win;
+  event.xclient.format = 32;
+  event.xclient.data.l[0] = data0;
+  event.xclient.data.l[1] = data1;
+  event.xclient.data.l[2] = data2;
+  event.xclient.data.l[3] = data3;
+  event.xclient.data.l[4] = data4;
+
+  if (XSendEvent(disp, DefaultRootWindow(disp), False, mask, &event)) {
+    return EXIT_SUCCESS;
+  }
+  else {
+    fprintf(stderr, "Cannot send %s event.\n", msg);
+    return EXIT_FAILURE;
+  }
 }/*}}}*/
 
 static gchar *get_output_str (gchar *str, gboolean is_utf8) {/*{{{*/
-    gchar *out;
-   
-    if (str == NULL) {
-        return NULL;
-    }
-    
-    if (envir_utf8) {
-        if (is_utf8) {
-            out = g_strdup(str);
-        }
-        else {
-            if (! (out = g_locale_to_utf8(str, -1, NULL, NULL, NULL))) {
-                p_verbose("Cannot convert string from locale charset to UTF-8.\n");
-                out = g_strdup(str);
-            }
-        }
+  gchar *out;
+
+  if (str == NULL) {
+    return NULL;
+  }
+
+  if (envir_utf8) {
+    if (is_utf8) {
+      out = g_strdup(str);
     }
     else {
-        if (is_utf8) {
-            if (! (out = g_locale_from_utf8(str, -1, NULL, NULL, NULL))) {
-                p_verbose("Cannot convert string from UTF-8 to locale charset.\n");
-                out = g_strdup(str);
-            }
-        }
-        else {
-            out = g_strdup(str);
-        }
+      if (! (out = g_locale_to_utf8(str, -1, NULL, NULL, NULL))) {
+        p_verbose("Cannot convert string from locale charset to UTF-8.\n");
+        out = g_strdup(str);
+      }
     }
+  }
+  else {
+    if (is_utf8) {
+      if (! (out = g_locale_from_utf8(str, -1, NULL, NULL, NULL))) {
+        p_verbose("Cannot convert string from UTF-8 to locale charset.\n");
+        out = g_strdup(str);
+      }
+    }
+    else {
+      out = g_strdup(str);
+    }
+  }
 
-    return out;
+  return out;
 }/*}}}*/
 
 static int wm_info (Display *disp) {/*{{{*/
-    Window *sup_window = NULL;
-    gchar *wm_name = NULL;
-    gchar *wm_class = NULL;
-    unsigned long *wm_pid = NULL;
-    unsigned long *showing_desktop = NULL;
-    gboolean name_is_utf8 = TRUE;
-    gchar *name_out;
-    gchar *class_out;
-    
+  Window *sup_window = NULL;
+  gchar *wm_name = NULL;
+  gchar *wm_class = NULL;
+  unsigned long *wm_pid = NULL;
+  unsigned long *showing_desktop = NULL;
+  gboolean name_is_utf8 = TRUE;
+  gchar *name_out;
+  gchar *class_out;
+
+  if (! (sup_window = (Window *)get_property(disp, DefaultRootWindow(disp),
+          XA_WINDOW, "_NET_SUPPORTING_WM_CHECK", NULL))) {
     if (! (sup_window = (Window *)get_property(disp, DefaultRootWindow(disp),
-                    XA_WINDOW, "_NET_SUPPORTING_WM_CHECK", NULL))) {
-        if (! (sup_window = (Window *)get_property(disp, DefaultRootWindow(disp),
-                        XA_CARDINAL, "_WIN_SUPPORTING_WM_CHECK", NULL))) {
-            fputs("Cannot get window manager info properties.\n"
-                  "(_NET_SUPPORTING_WM_CHECK or _WIN_SUPPORTING_WM_CHECK)\n", stderr);
-            return EXIT_FAILURE;
-        }
+            XA_CARDINAL, "_WIN_SUPPORTING_WM_CHECK", NULL))) {
+      fputs("Cannot get window manager info properties.\n"
+          "(_NET_SUPPORTING_WM_CHECK or _WIN_SUPPORTING_WM_CHECK)\n", stderr);
+      return EXIT_FAILURE;
     }
+  }
 
-    /* WM_NAME */
+  /* WM_NAME */
+  if (! (wm_name = get_property(disp, *sup_window,
+          XInternAtom(disp, "UTF8_STRING", False), "_NET_WM_NAME", NULL))) {
+    name_is_utf8 = FALSE;
     if (! (wm_name = get_property(disp, *sup_window,
-            XInternAtom(disp, "UTF8_STRING", False), "_NET_WM_NAME", NULL))) {
-        name_is_utf8 = FALSE;
-        if (! (wm_name = get_property(disp, *sup_window,
-                XA_STRING, "_NET_WM_NAME", NULL))) {
-            p_verbose("Cannot get name of the window manager (_NET_WM_NAME).\n");
-        }
+            XA_STRING, "_NET_WM_NAME", NULL))) {
+      p_verbose("Cannot get name of the window manager (_NET_WM_NAME).\n");
     }
-    name_out = get_output_str(wm_name, name_is_utf8);
-  
-    /* WM_CLASS */
-    if (! (wm_class = get_property(disp, *sup_window,
-            XInternAtom(disp, "UTF8_STRING", False), "WM_CLASS", NULL))) {
-        name_is_utf8 = FALSE;
-        if (! (wm_class = get_property(disp, *sup_window,
-                XA_STRING, "WM_CLASS", NULL))) {
-            p_verbose("Cannot get class of the window manager (WM_CLASS).\n");
-        }
-    }
-    class_out = get_output_str(wm_class, name_is_utf8);
-  
+  }
+  name_out = get_output_str(wm_name, name_is_utf8);
 
-    /* WM_PID */
-    if (! (wm_pid = (unsigned long *)get_property(disp, *sup_window,
-                    XA_CARDINAL, "_NET_WM_PID", NULL))) {
-        p_verbose("Cannot get pid of the window manager (_NET_WM_PID).\n");
+  /* WM_CLASS */
+  if (! (wm_class = get_property(disp, *sup_window,
+          XInternAtom(disp, "UTF8_STRING", False), "WM_CLASS", NULL))) {
+    name_is_utf8 = FALSE;
+    if (! (wm_class = get_property(disp, *sup_window,
+            XA_STRING, "WM_CLASS", NULL))) {
+      p_verbose("Cannot get class of the window manager (WM_CLASS).\n");
     }
-    
-    /* _NET_SHOWING_DESKTOP */
-    if (! (showing_desktop = (unsigned long *)get_property(disp, DefaultRootWindow(disp),
-                    XA_CARDINAL, "_NET_SHOWING_DESKTOP", NULL))) {
-        p_verbose("Cannot get the _NET_SHOWING_DESKTOP property.\n");
-    }
-    
-    /* print out the info */
-    printf("Name: %s\n", name_out ? name_out : "N/A");
-    printf("Class: %s\n", class_out ? class_out : "N/A");
-    
-    if (wm_pid) {
-        printf("PID: %lu\n", *wm_pid);
-    }
-    else {
-        printf("PID: N/A\n");
-    }
-    
-    if (showing_desktop) {
-        printf("Window manager's \"showing the desktop\" mode: %s\n",
-                *showing_desktop == 1 ? "ON" : "OFF");
-    }
-    else {
-        printf("Window manager's \"showing the desktop\" mode: N/A\n");
-    }
-    
-    g_free(name_out);
-    g_free(sup_window);
-    g_free(wm_name);
-	g_free(wm_class);
-    g_free(wm_pid);
-    g_free(showing_desktop);
-    
-    return EXIT_SUCCESS;
+  }
+  class_out = get_output_str(wm_class, name_is_utf8);
+
+
+  /* WM_PID */
+  if (! (wm_pid = (unsigned long *)get_property(disp, *sup_window,
+          XA_CARDINAL, "_NET_WM_PID", NULL))) {
+    p_verbose("Cannot get pid of the window manager (_NET_WM_PID).\n");
+  }
+
+  /* _NET_SHOWING_DESKTOP */
+  if (! (showing_desktop = (unsigned long *)get_property(disp, DefaultRootWindow(disp),
+          XA_CARDINAL, "_NET_SHOWING_DESKTOP", NULL))) {
+    p_verbose("Cannot get the _NET_SHOWING_DESKTOP property.\n");
+  }
+
+  /* print out the info */
+  printf("Name: %s\n", name_out ? name_out : "N/A");
+  printf("Class: %s\n", class_out ? class_out : "N/A");
+
+  if (wm_pid) {
+    printf("PID: %lu\n", *wm_pid);
+  }
+  else {
+    printf("PID: N/A\n");
+  }
+
+  if (showing_desktop) {
+    printf("Window manager's \"showing the desktop\" mode: %s\n",
+        *showing_desktop == 1 ? "ON" : "OFF");
+  }
+  else {
+    printf("Window manager's \"showing the desktop\" mode: N/A\n");
+  }
+
+  g_free(name_out);
+  g_free(sup_window);
+  g_free(wm_name);
+  g_free(wm_class);
+  g_free(wm_pid);
+  g_free(showing_desktop);
+
+  return EXIT_SUCCESS;
 }/*}}}*/
 
 static int showing_desktop (Display *disp) {/*{{{*/
-    unsigned long state;
-    
-    if (strcmp(options.param, "on") == 0) {
-        state = 1;
-    }
-    else if (strcmp(options.param, "off") == 0) {
-        state = 0;
-    }
-    else {
-        fputs("The argument to the -k option must be either \"on\" or \"off\"\n", stderr);
-        return EXIT_FAILURE;
-    }
+  unsigned long state;
 
-    return client_msg(disp, DefaultRootWindow(disp), "_NET_SHOWING_DESKTOP", 
-        state, 0, 0, 0, 0);
+  if (strcmp(options.param, "on") == 0) {
+    state = 1;
+  }
+  else if (strcmp(options.param, "off") == 0) {
+    state = 0;
+  }
+  else {
+    fputs("The argument to the -k option must be either \"on\" or \"off\"\n", stderr);
+    return EXIT_FAILURE;
+  }
+
+  return client_msg(disp, DefaultRootWindow(disp), "_NET_SHOWING_DESKTOP", 
+      state, 0, 0, 0, 0);
 }/*}}}*/
 
 static int change_viewport (Display *disp) {/*{{{*/
-    unsigned long x, y;
-    const char *argerr = "The -o option expects two integers separated with a comma.\n";
-   
-    if (sscanf(options.param, "%lu,%lu", &x, &y) == 2) {
-        return client_msg(disp, DefaultRootWindow(disp), "_NET_DESKTOP_VIEWPORT", 
-            x, y, 0, 0, 0);
-    }
-    else {
-        fputs(argerr, stderr);
-        return EXIT_FAILURE;
-    }
+  unsigned long x, y;
+  const char *argerr = "The -o option expects two integers separated with a comma.\n";
+
+  if (sscanf(options.param, "%lu,%lu", &x, &y) == 2) {
+    return client_msg(disp, DefaultRootWindow(disp), "_NET_DESKTOP_VIEWPORT", 
+        x, y, 0, 0, 0);
+  }
+  else {
+    fputs(argerr, stderr);
+    return EXIT_FAILURE;
+  }
 }/*}}}*/
 
 static int change_geometry (Display *disp) {/*{{{*/
-    unsigned long x, y;
-    const char *argerr = "The -g option expects two integers separated with a comma.\n";
-   
-    if (sscanf(options.param, "%lu,%lu", &x, &y) == 2) {
-        return client_msg(disp, DefaultRootWindow(disp), "_NET_DESKTOP_GEOMETRY", 
-            x, y, 0, 0, 0);
-    }
-    else {
-        fputs(argerr, stderr);
-        return EXIT_FAILURE;
-    }
+  unsigned long x, y;
+  const char *argerr = "The -g option expects two integers separated with a comma.\n";
+
+  if (sscanf(options.param, "%lu,%lu", &x, &y) == 2) {
+    return client_msg(disp, DefaultRootWindow(disp), "_NET_DESKTOP_GEOMETRY", 
+        x, y, 0, 0, 0);
+  }
+  else {
+    fputs(argerr, stderr);
+    return EXIT_FAILURE;
+  }
 }/*}}}*/
 
 static int change_number_of_desktops (Display *disp) {/*{{{*/
-    unsigned long n;
+  unsigned long n;
 
-    if (sscanf(options.param, "%lu", &n) != 1) {
-        fputs("The -n option expects an integer.\n", stderr);
-        return EXIT_FAILURE;
-    }
-    
-    return client_msg(disp, DefaultRootWindow(disp), "_NET_NUMBER_OF_DESKTOPS", 
-        n, 0, 0, 0, 0);
+  if (sscanf(options.param, "%lu", &n) != 1) {
+    fputs("The -n option expects an integer.\n", stderr);
+    return EXIT_FAILURE;
+  }
+
+  return client_msg(disp, DefaultRootWindow(disp), "_NET_NUMBER_OF_DESKTOPS", 
+      n, 0, 0, 0, 0);
 }/*}}}*/
 
 static int switch_desktop (Display *disp) {/*{{{*/
-    int target = -1;
-    
-    target = atoi(options.param); 
-    if (target == -1) {
-        fputs("Invalid desktop ID.\n", stderr);
-        return EXIT_FAILURE;
-    }
-    
-    return client_msg(disp, DefaultRootWindow(disp), "_NET_CURRENT_DESKTOP", 
-            (unsigned long)target, 0, 0, 0, 0);
+  int target = -1;
+
+  target = atoi(options.param); 
+  if (target == -1) {
+    fputs("Invalid desktop ID.\n", stderr);
+    return EXIT_FAILURE;
+  }
+
+  return client_msg(disp, DefaultRootWindow(disp), "_NET_CURRENT_DESKTOP", 
+      (unsigned long)target, 0, 0, 0, 0);
 }/*}}}*/
 
 static void window_set_title (Display *disp, Window win, /* {{{ */
-        char *title, char mode) {
-    gchar *title_utf8;
-    gchar *title_local;
+    char *title, char mode) {
+  gchar *title_utf8;
+  gchar *title_local;
 
-    if (envir_utf8) {
-        title_utf8 = g_strdup(title);
-        title_local = NULL;
+  if (envir_utf8) {
+    title_utf8 = g_strdup(title);
+    title_local = NULL;
+  }
+  else {
+    if (! (title_utf8 = g_locale_to_utf8(title, -1, NULL, NULL, NULL))) {
+      title_utf8 = g_strdup(title);
+    }
+    title_local = g_strdup(title);
+  }
+
+  if (mode == 'T' || mode == 'N') {
+    /* set name */
+    if (title_local) {
+      XChangeProperty(disp, win, XA_WM_NAME, XA_STRING, 8, PropModeReplace,
+          title_local, strlen(title_local));
     }
     else {
-        if (! (title_utf8 = g_locale_to_utf8(title, -1, NULL, NULL, NULL))) {
-            title_utf8 = g_strdup(title);
-        }
-        title_local = g_strdup(title);
+      XDeleteProperty(disp, win, XA_WM_NAME);
     }
-    
-    if (mode == 'T' || mode == 'N') {
-        /* set name */
-        if (title_local) {
-            XChangeProperty(disp, win, XA_WM_NAME, XA_STRING, 8, PropModeReplace,
-                    title_local, strlen(title_local));
-        }
-        else {
-            XDeleteProperty(disp, win, XA_WM_NAME);
-        }
-        XChangeProperty(disp, win, XInternAtom(disp, "_NET_WM_NAME", False), 
-                XInternAtom(disp, "UTF8_STRING", False), 8, PropModeReplace,
-                title_utf8, strlen(title_utf8));
-    }
+    XChangeProperty(disp, win, XInternAtom(disp, "_NET_WM_NAME", False), 
+        XInternAtom(disp, "UTF8_STRING", False), 8, PropModeReplace,
+        title_utf8, strlen(title_utf8));
+  }
 
-    if (mode == 'T' || mode == 'I') {
-        /* set icon name */
-        if (title_local) {
-            XChangeProperty(disp, win, XA_WM_ICON_NAME, XA_STRING, 8, PropModeReplace,
-                    title_local, strlen(title_local));
-        }
-        else {
-            XDeleteProperty(disp, win, XA_WM_ICON_NAME);
-        }
-        XChangeProperty(disp, win, XInternAtom(disp, "_NET_WM_ICON_NAME", False), 
-                XInternAtom(disp, "UTF8_STRING", False), 8, PropModeReplace,
-                title_utf8, strlen(title_utf8));
+  if (mode == 'T' || mode == 'I') {
+    /* set icon name */
+    if (title_local) {
+      XChangeProperty(disp, win, XA_WM_ICON_NAME, XA_STRING, 8, PropModeReplace,
+          title_local, strlen(title_local));
     }
-    
-    g_free(title_utf8);
-    g_free(title_local);
-    
+    else {
+      XDeleteProperty(disp, win, XA_WM_ICON_NAME);
+    }
+    XChangeProperty(disp, win, XInternAtom(disp, "_NET_WM_ICON_NAME", False), 
+        XInternAtom(disp, "UTF8_STRING", False), 8, PropModeReplace,
+        title_utf8, strlen(title_utf8));
+  }
+
+  g_free(title_utf8);
+  g_free(title_local);
+
 }/*}}}*/
 
 static int window_to_desktop (Display *disp, Window win, int desktop) {/*{{{*/
-    unsigned long *cur_desktop = NULL;
-    Window root = DefaultRootWindow(disp);
-   
-    if (desktop == -1) {
-        if (! (cur_desktop = (unsigned long *)get_property(disp, root,
-                XA_CARDINAL, "_NET_CURRENT_DESKTOP", NULL))) {
-            if (! (cur_desktop = (unsigned long *)get_property(disp, root,
-                    XA_CARDINAL, "_WIN_WORKSPACE", NULL))) {
-                fputs("Cannot get current desktop properties. "
-                      "(_NET_CURRENT_DESKTOP or _WIN_WORKSPACE property)"
-                      "\n", stderr);
-                return EXIT_FAILURE;
-            }
-        }
-        desktop = *cur_desktop;
-    }
-    g_free(cur_desktop);
+  unsigned long *cur_desktop = NULL;
+  Window root = DefaultRootWindow(disp);
 
-    return client_msg(disp, win, "_NET_WM_DESKTOP", (unsigned long)desktop,
-            0, 0, 0, 0);
+  if (desktop == -1) {
+    if (! (cur_desktop = (unsigned long *)get_property(disp, root,
+            XA_CARDINAL, "_NET_CURRENT_DESKTOP", NULL))) {
+      if (! (cur_desktop = (unsigned long *)get_property(disp, root,
+              XA_CARDINAL, "_WIN_WORKSPACE", NULL))) {
+        fputs("Cannot get current desktop properties. "
+            "(_NET_CURRENT_DESKTOP or _WIN_WORKSPACE property)"
+            "\n", stderr);
+        return EXIT_FAILURE;
+      }
+    }
+    desktop = *cur_desktop;
+  }
+  g_free(cur_desktop);
+
+  return client_msg(disp, win, "_NET_WM_DESKTOP", (unsigned long)desktop,
+      0, 0, 0, 0);
 }/*}}}*/
 
 static int activate_window (Display *disp, Window win, /* {{{ */
@@ -909,6 +909,9 @@ static int action_window (Display *disp, Window win, char mode) {/*{{{*/
         case 'N': case 'I': case 'T':
             window_set_title(disp, win, options.param, mode);
             return EXIT_SUCCESS;
+
+        case 'z':
+            return XLowerWindow(disp, win);
 
         default:
             fprintf(stderr, "Unknown action: '%c'\n", mode);
