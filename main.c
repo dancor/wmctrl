@@ -874,9 +874,14 @@ static int window_move_resize (Display *disp, Window win, char *arg) {/*{{{*/
     }
 }/*}}}*/
 
-static int action_window (Display *disp, Window win, char mode) {/*{{{*/
-    XTextProperty text_prop_return;
+static int window_say_title (Display *disp, Window win) {
+    gchar *title_utf8 = get_window_title(disp, win);
+    printf("%s\n", title_utf8);
+    g_free(title_utf8);
+    return EXIT_SUCCESS;
+}
 
+static int action_window (Display *disp, Window win, char mode) {/*{{{*/
     p_verbose("Using window: 0x%.8lx\n", win);
     switch (mode) {
         case 'a':
@@ -916,12 +921,7 @@ static int action_window (Display *disp, Window win, char mode) {/*{{{*/
             // iconify
             return XLowerWindow(disp, win);
         case 'E':
-            // say title
-            // FIXME: why isn't XSetWMName used for the other title stuff in
-            // wmctrl?
-            XGetWMName(disp, win, &text_prop_return);
-            printf("%s\n", text_prop_return.value);
-            return EXIT_SUCCESS;
+            return window_say_title(disp, win);
 
         default:
             fprintf(stderr, "Unknown action: '%c'\n", mode);
