@@ -264,7 +264,7 @@ int main (int argc, char **argv) { /* {{{ */
         }
     }
    
-    while ((opt = getopt(argc, argv, "FGVvhlupidmxa:r:s:c:t:w:k:o:n:g:e:b:z:N:I:T:R:")) != -1) {
+    while ((opt = getopt(argc, argv, "FGVvhlupidmxa:r:s:c:t:w:k:o:n:g:e:b:z:E:N:I:T:R:")) != -1) {
         missing_option = 0;
         switch (opt) {
             case 'F':
@@ -289,7 +289,7 @@ int main (int argc, char **argv) { /* {{{ */
             case 'p':
                 options.show_pid = 1;
                 break;
-            case 'a': case 'c': case 'R': case 'z':
+            case 'a': case 'c': case 'R': case 'z': case 'E':
                 options.param_window = optarg;
                 action = opt;
                 break;
@@ -355,7 +355,7 @@ int main (int argc, char **argv) { /* {{{ */
         case 'm':
             ret = wm_info(disp);
             break;
-        case 'a': case 'c': case 'R': case 'z':
+        case 'a': case 'c': case 'R': case 'z': case 'E':
         case 't': case 'e': case 'b': case 'N': case 'I': case 'T':
             if (! options.param_window) {
                 fputs("No window was specified.\n", stderr);
@@ -875,6 +875,8 @@ static int window_move_resize (Display *disp, Window win, char *arg) {/*{{{*/
 }/*}}}*/
 
 static int action_window (Display *disp, Window win, char mode) {/*{{{*/
+    XTextProperty text_prop_return;
+
     p_verbose("Using window: 0x%.8lx\n", win);
     switch (mode) {
         case 'a':
@@ -911,7 +913,15 @@ static int action_window (Display *disp, Window win, char mode) {/*{{{*/
             return EXIT_SUCCESS;
 
         case 'z':
+            // iconify
             return XLowerWindow(disp, win);
+        case 'E':
+            // say title
+            // FIXME: why isn't XSetWMName used for the other title stuff in
+            // wmctrl?
+            XGetWMName(disp, win, &text_prop_return);
+            printf("%s\n", text_prop_return.value);
+            return EXIT_SUCCESS;
 
         default:
             fprintf(stderr, "Unknown action: '%c'\n", mode);
