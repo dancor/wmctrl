@@ -58,6 +58,7 @@ Free Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 "  -r <WIN> -t <DESK>   Move the window to the specified desktop.\n" \
 "  -r <WIN> -e <MVARG>  Resize and move the window around the desktop.\n" \
 "                       The format of the <MVARG> argument is described below.\n" \
+"  -r <WIN> -y <MVARG>  Resize and move like above, then reactivate.\n" \
 "  -r <WIN> -b <STARG>  Change the state of the window. Using this option it's\n" \
 "                       possible for example to make the window maximized,\n" \
 "                       minimized or fullscreen. The format of the <STARG>\n" \
@@ -264,7 +265,7 @@ int main (int argc, char **argv) { /* {{{ */
         }
     }
    
-    while ((opt = getopt(argc, argv, "FGVvhlupidmxa:r:s:c:t:w:k:o:n:g:e:b:z:E:N:I:T:R:")) != -1) {
+    while ((opt = getopt(argc, argv, "FGVvhlupidmxa:r:s:c:t:w:k:o:n:g:e:y:b:z:E:N:I:T:R:")) != -1) {
         missing_option = 0;
         switch (opt) {
             case 'F':
@@ -296,7 +297,7 @@ int main (int argc, char **argv) { /* {{{ */
             case 'r':
                 options.param_window = optarg;
                 break; 
-            case 't': case 'e': case 'b': case 'N': case 'I': case 'T':
+            case 't': case 'e': case 'b': case 'N': case 'I': case 'T': case 'y':
                 options.param = optarg;
                 action = opt;
                 break;
@@ -356,7 +357,7 @@ int main (int argc, char **argv) { /* {{{ */
             ret = wm_info(disp);
             break;
         case 'a': case 'c': case 'R': case 'z': case 'E':
-        case 't': case 'e': case 'b': case 'N': case 'I': case 'T':
+        case 't': case 'e': case 'b': case 'N': case 'I': case 'T': case 'y':
             if (! options.param_window) {
                 fputs("No window was specified.\n", stderr);
                 return EXIT_FAILURE;
@@ -882,6 +883,7 @@ static int window_say_title (Display *disp, Window win) {
 }
 
 static int action_window (Display *disp, Window win, char mode) {/*{{{*/
+    int rv;
     p_verbose("Using window: 0x%.8lx\n", win);
     switch (mode) {
         case 'a':
@@ -893,6 +895,12 @@ static int action_window (Display *disp, Window win, char mode) {/*{{{*/
         case 'e':
             /* resize/move the window around the desktop => -r -e */
             return window_move_resize(disp, win, options.param);
+
+        case 'y':
+            /* resize/move the window, then activate it */
+            rv = window_move_resize(disp, win, options.param);
+            activate_window(disp, win, TRUE);
+            return rv;
 
         case 'b':
             /* change state of a window => -r -b */
