@@ -49,6 +49,7 @@ Free Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 "  -l                   List windows managed by the window manager.\n" \
 "  -d                   List desktops. The current desktop is marked\n" \
 "                       with an asterisk.\n" \
+"  -j                   List current desktop.\n" \
 "  -s <DESK>            Switch to the specified desktop.\n" \
 "  -a <WIN>             Activate the window by switching to its desktop and\n" \
 "                       raising it.\n" \
@@ -195,6 +196,7 @@ static int client_msg(Display *disp, Window win, char *msg,
         unsigned long data2, unsigned long data3,
         unsigned long data4);
 static int list_windows (Display *disp);
+static int list_current_desktop (Display *disp);
 static int list_desktops (Display *disp);
 static int showing_desktop (Display *disp);
 static int change_viewport (Display *disp);
@@ -265,7 +267,7 @@ int main (int argc, char **argv) { /* {{{ */
         }
     }
    
-    while ((opt = getopt(argc, argv, "FGVvhlupidmxa:r:s:c:t:w:k:o:n:g:e:y:b:z:E:N:I:T:R:")) != -1) {
+    while ((opt = getopt(argc, argv, "FGVvhlupidjmxa:r:s:c:t:w:k:o:n:g:e:y:b:z:E:N:I:T:R:")) != -1) {
         missing_option = 0;
         switch (opt) {
             case 'F':
@@ -346,6 +348,9 @@ int main (int argc, char **argv) { /* {{{ */
             break;
         case 'l':
             ret = list_windows(disp);
+            break;
+        case 'j':
+            ret = list_current_desktop(disp);
             break;
         case 'd':
             ret = list_desktops(disp);
@@ -1035,6 +1040,25 @@ static int action_window_str (Display *disp, char mode) {/*{{{*/
         }
     }
 }/*}}}*/
+
+
+static int list_current_desktop (Display *disp) {/*{{{*/
+    unsigned long *cur_desktop = NULL;
+    Window root = DefaultRootWindow(disp);
+    if (! (cur_desktop = (unsigned long *)get_property(disp, root,
+            XA_CARDINAL, "_NET_CURRENT_DESKTOP", NULL))) {
+        if (! (cur_desktop = (unsigned long *)get_property(disp, root,
+                XA_CARDINAL, "_WIN_WORKSPACE", NULL))) {
+            fputs("Cannot get current desktop properties. "
+                  "(_NET_CURRENT_DESKTOP or _WIN_WORKSPACE property)"
+                  "\n", stderr);
+            g_free(cur_desktop);
+            return EXIT_FAILURE;
+        }
+    }
+    printf("%-2d\n", *cur_desktop);
+    return EXIT_SUCCESS;
+}
 
 static int list_desktops (Display *disp) {/*{{{*/
     unsigned long *num_desktops = NULL;
