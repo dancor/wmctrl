@@ -1485,7 +1485,7 @@ static gchar *get_property (Display *disp, Window win, /*{{{*/
     }
 
     /* null terminate the result to make string handling easier */
-    tmp_size = (ret_format / 8) * ret_nitems;
+    tmp_size = (ret_format / (32 / sizeof(long))) * ret_nitems;
     ret = g_malloc(tmp_size + 1);
     memcpy(ret, ret_prop, tmp_size);
     ret[tmp_size] = '\0';
