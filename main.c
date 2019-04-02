@@ -51,6 +51,7 @@ Free Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 "                       with an asterisk.\n" \
 "  -j                   List current desktop.\n" \
 "  -s <DESK>            Switch to the specified desktop.\n" \
+"  -M <DESK>,<STR>      Rename the specified desktop to STR.\n" \
 "  -a <WIN>             Activate the window by switching to its desktop and\n" \
 "                       raising it.\n" \
 "  -c <WIN>             Close the window gracefully.\n" \
@@ -203,6 +204,7 @@ static int change_viewport (Display *disp);
 static int change_geometry (Display *disp);
 static int change_number_of_desktops (Display *disp);
 static int switch_desktop (Display *disp);
+static int set_desktop_name (Display *disp);
 static int wm_info (Display *disp);
 static gchar *get_output_str (gchar *str, gboolean is_utf8);
 static int action_window (Display *disp, Window win, char mode);
@@ -267,7 +269,7 @@ int main (int argc, char **argv) { /* {{{ */
         }
     }
    
-    while ((opt = getopt(argc, argv, "FGVvhlupidjmxa:r:s:c:t:w:k:o:n:g:e:y:b:z:E:N:I:T:R:")) != -1) {
+    while ((opt = getopt(argc, argv, "FGVvhlupidjmxa:r:s:c:t:w:k:o:n:g:e:y:b:z:E:N:I:T:R:M:")) != -1) {
         missing_option = 0;
         switch (opt) {
             case 'F':
@@ -316,7 +318,7 @@ int main (int argc, char **argv) { /* {{{ */
                     return EXIT_FAILURE;
                 }
                 break;
-            case 'k': case 'o': case 'n': case 'g':
+            case 'k': case 'o': case 'n': case 'g': case 'M':
                 options.param = optarg;
                 action = opt;
                 break;
@@ -382,6 +384,9 @@ int main (int argc, char **argv) { /* {{{ */
             break;
         case 'n':
             ret = change_number_of_desktops(disp);
+            break;
+        case 'M':
+            ret = set_desktop_name(disp);
             break;
         case 'g':
             ret = change_geometry(disp);
@@ -633,6 +638,91 @@ static int switch_desktop (Display *disp) {/*{{{*/
   return client_msg(disp, DefaultRootWindow(disp), "_NET_CURRENT_DESKTOP", 
       (unsigned long)target, 0, 0, 0, 0);
 }/*}}}*/
+
+static int set_desktop_name (Display *disp) {
+    int target = -1;
+    int ret = -1;
+    int i;
+    int id;
+    unsigned long *num_desktops = NULL;
+    unsigned long desktop_list_size = 0;
+    gchar **names = NULL;
+    Window root = DefaultRootWindow(disp);
+    guchar *list = NULL;
+    guchar *new_names = NULL;
+    guchar * new_name = g_malloc0(strlen(options.param) * sizeof(char*));
+    if (sscanf(options.param, "%d,%100[^\t\n]", &target, new_name) == 2) {
+        if (! (num_desktops = (unsigned long *)get_property(disp, root,
+                XA_CARDINAL, "_NET_NUMBER_OF_DESKTOPS", NULL))) {
+            if (! (num_desktops = (unsigned long *)get_property(disp, root,
+                    XA_CARDINAL, "_WIN_WORKSPACE_COUNT", NULL))) {
+                fputs("Cannot get number of desktops properties. "
+                      "(_NET_NUMBER_OF_DESKTOPS or _WIN_WORKSPACE_COUNT)"
+                      "\n", stderr);
+                free(num_desktops);
+            }
+        }
+        if (options.wa_desktop_titles_invalid_utf8 || 
+                (list = get_property(disp, root, 
+                XInternAtom(disp, "UTF8_STRING", False), 
+                "_NET_DESKTOP_NAMES", &desktop_list_size)) == NULL) {
+            if ((list = get_property(disp, root, 
+                XA_STRING, 
+                "_WIN_WORKSPACE_NAMES", &desktop_list_size)) == NULL) {
+                p_verbose("Cannot get desktop names properties. "
+                      "(_NET_DESKTOP_NAMES or _WIN_WORKSPACE_NAMES)"
+                      "\n");
+                /* ignore the error - list the desktops without names */
+            }
+        }
+        // /* prepare the array of desktop names */
+        names = g_malloc0(*num_desktops * sizeof(char *));
+        if (list) {
+            id = 0;
+            names[id++] = list;
+            for (i = 0; i < desktop_list_size; i++) {
+                if (list[i] == '\0') {
+                    if (id >= *num_desktops) {
+                        break;
+                    }
+                    names[id++] = list + i + 1;
+                }
+            }
+        }
+        if (target <= *num_desktops && target >= 1){
+            // /* _NET_DESKTOP_NAMES expects a list of NULL-terminated strings  */
+            new_names = g_malloc0(desktop_list_size * sizeof(char));
+            int count=0;
+            for(i=0; i<*num_desktops;i++){
+                if ((target-1) == i){
+                    for(int j=0;j<strlen(new_name); j++){
+                        new_names[count++] = new_name[j];
+                    }
+                }
+                else{
+                    for(int j=0;j<strlen(names[i]); j++){
+                        new_names[count++] = names[i][j];
+                    }
+                }
+                new_names[count++] = '\0';
+            }
+            ret = XChangeProperty(disp, root, XInternAtom(disp, "_NET_DESKTOP_NAMES", False), XInternAtom(disp, "UTF8_STRING", False),
+                8, PropModeReplace, new_names, desktop_list_size);
+        }
+        else{
+            fputs("Desktop out of range.\n", stderr);
+            ret = EXIT_FAILURE;
+        }
+    }
+    else {
+        fputs("The -M option expects DESKTOP_NUM,NEW_NAME.\n", stderr);
+        ret = EXIT_FAILURE;
+    }
+    g_free(names);
+    g_free(new_names);
+    g_free(new_name);
+    return ret;
+}
 
 static void window_set_title (Display *disp, Window win, /* {{{ */
     char *title, char mode) {
@@ -1056,7 +1146,7 @@ static int list_current_desktop (Display *disp) {/*{{{*/
             return EXIT_FAILURE;
         }
     }
-    printf("%-2d\n", *cur_desktop);
+    printf("%lu\n", *cur_desktop);
     return EXIT_SUCCESS;
 }
 
@@ -1568,5 +1658,6 @@ static Window get_active_window(Display *disp) {/*{{{*/
 
     return(ret);
 }/*}}}*/
+
 
 
